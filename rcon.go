@@ -40,7 +40,7 @@ var (
 )
 
 func Dial(host, password string) (*RemoteConsole, error) {
-	const timeout = 10 * time.Second
+	const timeout = 5 * time.Second
 	conn, err := net.DialTimeout("tcp", host, timeout)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func Dial(host, password string) (*RemoteConsole, error) {
 	r.readbuf = make([]byte, readBufferSize)
 
 	var respType, requestId int
-	respType, requestId, _, err = r.readResponse(timeout)
+	respType, requestId, _, _, err = r.readResponse(timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func Dial(host, password string) (*RemoteConsole, error) {
 	// with RCON servers that you get an empty response before receiving the
 	// auth response.
 	if respType != respAuthResponse {
-		respType, requestId, _, err = r.readResponse(timeout)
+		respType, requestId, _, _, err = r.readResponse(timeout)
 	}
 	if err != nil {
 		return nil, err
@@ -95,12 +95,23 @@ func (r *RemoteConsole) Write(cmd string) (requestId int, err error) {
 func (r *RemoteConsole) Read() (response string, requestId int, err error) {
 	var respType int
 	var respBytes []byte
-	respType, requestId, respBytes, err = r.readResponse(2 * time.Minute)
+	var respSize int
+	respType, requestId, respSize, respBytes, err = r.readResponse(10 * time.Second)
 	if err != nil || respType != respResponse {
 		response = ""
 		requestId = 0
 	} else {
 		response = string(respBytes)
+	}
+	// Ungly way of predicting Squad will split response data in 2 packets.
+	if respSize > 3000 {
+		respType, requestId, respSize, respBytes, err = r.readResponse(10 * time.Second)
+		if err != nil || respType != respResponse {
+			response = ""
+			requestId = 0
+		} else {
+			response += string(respBytes)
+		}
 	}
 	return
 }
@@ -148,7 +159,7 @@ func (r *RemoteConsole) writeCmd(cmdType int32, str string) (int, error) {
 	return int(reqid), err
 }
 
-func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, []byte, error) {
+func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, int, []byte, error) {
 	r.readmu.Lock()
 	defer r.readmu.Unlock()
 
@@ -162,14 +173,14 @@ func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, []byte, e
 	} else {
 		size, err = r.conn.Read(r.readbuf)
 		if err != nil {
-			return 0, 0, nil, err
+			return 0, 0, 0, nil, err
 		}
 	}
 	if size < 4 {
 		// need the 4 byte packet size...
 		s, err := r.conn.Read(r.readbuf[size:])
 		if err != nil {
-			return 0, 0, nil, err
+			return 0, 0, 0, nil, err
 		}
 		size += s
 	}
@@ -178,19 +189,19 @@ func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, []byte, e
 	b := bytes.NewBuffer(r.readbuf[:size])
 	binary.Read(b, binary.LittleEndian, &dataSize32)
 	if dataSize32 < 10 {
-		return 0, 0, nil, ErrUnexpectedFormat
+		return 0, 0, 0, nil, ErrUnexpectedFormat
 	}
 
 	totalSize := size
 	dataSize := int(dataSize32)
 	if dataSize > 4106 {
-		return 0, 0, nil, ErrResponseTooLong
+		return 0, 0, 0, nil, ErrResponseTooLong
 	}
 
 	for dataSize+4 > totalSize {
 		size, err := r.conn.Read(r.readbuf[totalSize:])
 		if err != nil {
-			return 0, 0, nil, err
+			return 0, 0, 0, nil, err
 		}
 		totalSize += size
 	}
@@ -202,10 +213,10 @@ func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, []byte, e
 		r.queuedbuf = r.readbuf[4+dataSize : totalSize]
 	}
 
-	return r.readResponseData(data)
+	return r.readResponseData(data, size)
 }
 
-func (r *RemoteConsole) readResponseData(data []byte) (int, int, []byte, error) {
+func (r *RemoteConsole) readResponseData(data []byte, size int) (int, int, int, []byte, error) {
 	var requestId, responseType int32
 	var response []byte
 	b := bytes.NewBuffer(data)
@@ -213,11 +224,11 @@ func (r *RemoteConsole) readResponseData(data []byte) (int, int, []byte, error) 
 	binary.Read(b, binary.LittleEndian, &responseType)
 	response, err := b.ReadBytes(0x00)
 	if err != nil && err != io.EOF {
-		return 0, 0, nil, err
+		return 0, 0, 0, nil, err
 	}
 	if err == nil {
 		// if we didn't hit EOF, we have a null byte to remove
 		response = response[:len(response)-1]
 	}
-	return int(responseType), int(requestId), response, nil
+	return int(responseType), int(requestId), int(size), response, nil
 }
