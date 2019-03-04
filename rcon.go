@@ -40,7 +40,7 @@ var (
 )
 
 func Dial(host, password string) (*RemoteConsole, error) {
-	const timeout = 5 * time.Second
+	const timeout = 15 * time.Second
 	conn, err := net.DialTimeout("tcp", host, timeout)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (r *RemoteConsole) Read() (response string, requestId int, err error) {
 	var respType int
 	var respBytes []byte
 	var respSize int
-	respType, requestId, respSize, respBytes, err = r.readResponse(10 * time.Second)
+	respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
 	if err != nil || respType != respResponse {
 		response = ""
 		requestId = 0
@@ -105,7 +105,7 @@ func (r *RemoteConsole) Read() (response string, requestId int, err error) {
 	}
 	// Ungly way of predicting Squad will split response data in 2 packets.
 	if respSize > 3000 {
-		respType, requestId, respSize, respBytes, err = r.readResponse(10 * time.Second)
+		respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
 		if err != nil || respType != respResponse {
 			response = ""
 			requestId = 0
