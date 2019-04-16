@@ -16,6 +16,7 @@ const (
 	cmdExecCommand = 2
 
 	respResponse     = 0
+	respChat         = 1
 	respAuthResponse = 2
 )
 
@@ -97,7 +98,7 @@ func (r *RemoteConsole) Read() (response string, requestId int, err error) {
 	var respBytes []byte
 	var respSize int
 	respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
-	if err != nil || respType != respResponse {
+	if err != nil || respType != respResponse && respType != respChat {
 		response = ""
 		requestId = 0
 	} else {
