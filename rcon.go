@@ -93,8 +93,7 @@ func (r *RemoteConsole) Write(cmd string) (requestId int, err error) {
 	return r.writeCmd(cmdExecCommand, cmd)
 }
 
-func (r *RemoteConsole) Read() (response string, requestId int, err error) {
-	var respType int
+func (r *RemoteConsole) Read() (response string, respType int, requestId int, err error) {
 	var respBytes []byte
 	var respSize int
 	respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
@@ -213,7 +212,6 @@ func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, int, []by
 		// save it for the next read.
 		r.queuedbuf = r.readbuf[4+dataSize : totalSize]
 	}
-
 	return r.readResponseData(data, size)
 }
 
