@@ -16,8 +16,8 @@ const (
 	cmdExecCommand = 2
 
 	respResponse     = 0
-	respChat         = 1
 	respAuthResponse = 2
+	respChat         = 1
 )
 
 // 12 byte header, up to 4096 bytes of data, 2 bytes for null terminators.
@@ -93,11 +93,12 @@ func (r *RemoteConsole) Write(cmd string) (requestId int, err error) {
 	return r.writeCmd(cmdExecCommand, cmd)
 }
 
-func (r *RemoteConsole) Read() (response string, respType int, requestId int, err error) {
+func (r *RemoteConsole) Read() (response string, requestId int, err error) {
+	var respType int
 	var respBytes []byte
 	var respSize int
 	respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
-	if err != nil || respType != respResponse && respType != respChat {
+	if err != nil || respType != respResponse {
 		response = ""
 		requestId = 0
 	} else {
@@ -212,6 +213,7 @@ func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, int, []by
 		// save it for the next read.
 		r.queuedbuf = r.readbuf[4+dataSize : totalSize]
 	}
+
 	return r.readResponseData(data, size)
 }
 
