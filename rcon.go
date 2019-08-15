@@ -18,6 +18,9 @@ const (
 	respResponse     = 0
 	respAuthResponse = 2
 	respChat         = 1
+
+	dialTimeout = 5 * time.Second
+	readTimeout = 300 * time.Second
 )
 
 // 12 byte header, up to 4096 bytes of data, 2 bytes for null terminators.
@@ -41,8 +44,7 @@ var (
 )
 
 func Dial(host, password string) (*RemoteConsole, error) {
-	const timeout = 15 * time.Second
-	conn, err := net.DialTimeout("tcp", host, timeout)
+	conn, err := net.DialTimeout("tcp", host, dialTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +59,7 @@ func Dial(host, password string) (*RemoteConsole, error) {
 	r.readbuf = make([]byte, readBufferSize)
 
 	var respType, requestId int
-	respType, requestId, _, _, err = r.readResponse(timeout)
+	respType, requestId, _, _, err = r.readResponse(readTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +68,7 @@ func Dial(host, password string) (*RemoteConsole, error) {
 	// with RCON servers that you get an empty response before receiving the
 	// auth response.
 	if respType != respAuthResponse {
-		respType, requestId, _, _, err = r.readResponse(timeout)
+		respType, requestId, _, _, err = r.readResponse(readTimeout)
 	}
 	if err != nil {
 		return nil, err
