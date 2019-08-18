@@ -196,7 +196,7 @@ func (r *RemoteConsole) readResponse(timeout time.Duration) (int, int, int, []by
 
 	totalSize := size
 	dataSize := int(dataSize32)
-	if dataSize > 4106 {
+	if dataSize > 8192 {
 		return 0, 0, 0, nil, ErrResponseTooLong
 	}
 
