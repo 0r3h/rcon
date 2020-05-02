@@ -25,7 +25,7 @@ const (
 
 // 12 byte header, up to 4096 bytes of data, 2 bytes for null terminators.
 // this should be the absolute max size of a single response.
-const readBufferSize = 4110
+const readBufferSize = 5120
 
 type RemoteConsole struct {
 	conn      net.Conn
@@ -98,20 +98,18 @@ func (r *RemoteConsole) Write(cmd string) (requestId int, err error) {
 func (r *RemoteConsole) Read() (response string, respType int, requestId int, err error) {
 	var respBytes []byte
 	var respSize int
-	respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
+	respType, requestId, respSize, respBytes, err = r.readResponse(5 * time.Second)
 	if err != nil || respType != respResponse && respType != respChat {
 		response = ""
 		requestId = 0
 	} else {
 		response = string(respBytes)
 	}
-	// Ungly way of predicting Squad will split response data in 2 packets.
-	if respSize > 3000 {
-		respType, requestId, respSize, respBytes, err = r.readResponse(15 * time.Second)
-		if err != nil || respType != respResponse {
-			response = ""
-			requestId = 0
-		} else {
+	// Ugly way of predicting Squad will split response data in multiple packets.
+	for respSize > 3000 {
+		oldRequestID := requestId
+		respType, requestId, respSize, respBytes, _ = r.readResponse(50 * time.Millisecond)
+		if requestId == oldRequestID {
 			response += string(respBytes)
 		}
 	}
